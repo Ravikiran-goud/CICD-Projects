@@ -1,13 +1,6 @@
-name: Python Tests
-#Test run1
+name: My First GitHub Actions
 
-on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
+on: [push]
 
 jobs:
   test:
