@@ -1,71 +1,169 @@
-# DevOpsify the go web application
+# DevOps Pipeline: CI/CD Workflow for a Go Web Application
 
-The main goal of this project is to implement DevOps practices in the Go web application. The project is a simple website written in Golang. It uses the `net/http` package to serve HTTP requests.
+This project demonstrates a **fully automated CI/CD pipeline** for deploying a **Go web application** on **AWS EKS** using **Docker, Kubernetes, Helm, and ArgoCD**.
 
-DevOps practices include the following:
+---
 
-- Creating Dockerfile (Multi-stage build)
-- Containerization
-- Continuous Integration (CI)
-- Continuous Deployment (CD)
+## 📌 CI/CD Pipeline Workflow
 
-## Summary Diagram
-![image](https://github.com/user-attachments/assets/45f4ef12-c5b5-4247-9d43-356b5dfb671b)
+![CI/CD Pipeline Workflow]
 
 
-## Creating Dockerfile (Multi-stage build)
+![Website](static/images/cicd-flow.png)
+---
 
-The Dockerfile is used to build a Docker image. The Docker image contains the Go web application and its dependencies. The Docker image is then used to create a Docker container.
+## 🚀 Step 1: Develop & Containerize the Application
 
-We will use a Multi-stage build to create the Docker image. The Multi-stage build is a feature of Docker that allows you to use multiple build stages in a single Dockerfile. This will reduce the size of the final Docker image and also secure the image by removing unnecessary files and packages.
-
-## Containerization
-
-Containerization is the process of packaging an application and its dependencies into a container. The container is then run on a container platform such as Docker. Containerization allows you to run the application in a consistent environment, regardless of the underlying infrastructure.
-
-We will use Docker to containerize the Go web application. Docker is a container platform that allows you to build, ship, and run containers.
-
-Commands to build the Docker container:
-
-```bash
-docker build -t <your-docker-username>/go-web-app .
+### ✅ Build & Run the Go Application Locally
+```sh
+go build -o main
+go run main.go
 ```
 
-Command to run the Docker container:
-
-```bash
-docker run -p 8080:8080 <your-docker-username>/go-web-app
+### ✅ Containerization with Docker
+- Create a **multi-stage Dockerfile** using a **distroless base image**.
+- Build the Docker image:
+```sh
+docker build -t <dockerhub-username>/go-web-app:v1 .
+```
+- Run the container locally:
+```sh
+docker run -p 8080:8080 -it <dockerhub-username>/go-web-app:v1
+```
+- Push the image to DockerHub:
+```sh
+docker push <dockerhub-username>/go-web-app
 ```
 
-Command to push the Docker container to Docker Hub:
+---
 
-```bash
-docker push <your-docker-username>/go-web-app
+## 🏗 Step 2: Kubernetes Deployment
+
+### ✅ Set Up AWS EKS Cluster
+```sh
+eksctl create cluster --name demo-cluster --region us-east-1
 ```
 
-## Continuous Integration (CI)
+### ✅ Deploy Application on Kubernetes
+- Apply Deployment:
+```sh
+kubectl apply -f deployment.yaml
+```
+- Expose Service via ClusterIP:
+```sh
+kubectl apply -f service.yaml
+```
 
-Continuous Integration (CI) is the practice of automating the integration of code changes into a shared repository. CI helps to catch bugs early in the development process and ensures that the code is always in a deployable state.
+### ✅ Enable External Access Using Ingress
+- Apply Ingress:
+```sh
+kubectl apply -f ingress.yaml
+```
 
-We will use GitHub Actions to implement CI for the Go web application. GitHub Actions is a feature of GitHub that allows you to automate workflows, such as building, testing, and deploying code.
+---
 
-The GitHub Actions workflow will run the following steps:
+## 🌐 Step 3: Ingress Controller Setup (AWS ALB)
+- Install **Nginx Ingress Controller**:
+```sh
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.11.1/deploy/static/provider/aws/deploy.yaml
+```
+- Get the **Load Balancer Address**:
+```sh
+kubectl get svc -n ingress-nginx
+```
+- Map the Load Balancer IP to Local DNS:
+```sh
+nslookup <LoadBalancer-Address>
+sudo vim /etc/hosts  # Add go-web-app.local
+```
 
-- Checkout the code from the repository
-- Build the Docker image
-- Run the Docker container
-- Run tests
+---
 
-## Continuous Deployment (CD)
+## 📦 Step 4: Helm for Kubernetes Configuration Management
+- Create a **Helm Chart**:
+```sh
+helm create go-web-app-chart
+```
+- Customize `values.yaml` for **dynamic image updates**.
+- Deploy Helm Chart:
+```sh
+helm install go-web-app go-web-app-chart/
+```
 
-Continuous Deployment (CD) is the practice of automatically deploying code changes to a production environment. CD helps to reduce the time between code changes and deployment, allowing you to deliver new features and fixes to users faster.
+---
 
-We will use Argo CD to implement CD for the Go web application. Argo CD is a declarative, GitOps continuous delivery tool for Kubernetes. It allows you to deploy applications to Kubernetes clusters using Git as the source of truth.
+## 🔄 Step 5: Implement CI/CD with GitHub Actions & ArgoCD
 
-The Argo CD application will deploy the Go web application to a Kubernetes cluster. The application will be automatically synced with the Git repository, ensuring that the application is always up to date.
+### ✅ **CI (Continuous Integration) - GitHub Actions**
+- **Pipeline Jobs:**
+  - **Build & Unit Test**:
+  ```sh
+  go build -o go-web-app
+  go test ./...
+  ```
+  - **Static Code Analysis**:
+  ```sh
+  golangci-lint run
+  ```
+  - **Docker Image Build & Push**:
+  ```sh
+  docker build -t <dockerhub-username>/go-web-app:<tag> .
+  docker push <dockerhub-username>/go-web-app:<tag>
+  ```
+  - **Update Helm Chart with New Image Tag**:
+  ```sh
+  sed -i "s/tag:.*/tag: <tag>/" helm/go-web-app-chart/values.yaml
+  ```
 
-## Conclusion
+### ✅ **CD (Continuous Deployment) - GitOps with ArgoCD**
+- Install **ArgoCD**:
+```sh
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+```
+- Expose **ArgoCD UI** via Load Balancer:
+```sh
+kubectl patch svc argocd-server -n argocd -p '{"spec": {"type": "LoadBalancer"}}'
+```
+- Get the **ArgoCD UI IP**:
+```sh
+kubectl get svc argocd-server -n argocd
+```
+- Deploy Application via **ArgoCD**:
+```sh
+argocd app create go-web-app --repo <repo-url> --path helm/go-web-app-chart --dest-server https://kubernetes.default.svc --dest-namespace default
+```
 
+---
+
+## 🎯 Final Deployment
+- Verify Deployment Status:
+```sh
+kubectl get pods
+kubectl get svc
+kubectl get ingress
+```
+
+---
+
+## 🛠 Technologies Used
+- **Go** (Backend)
+- **Docker** (Containerization)
+- **Kubernetes** (Orchestration)
+- **AWS EKS** (Managed Kubernetes)
+- **Helm** (Package Management)
+- **GitHub Actions** (CI Pipeline)
+- **ArgoCD** (CD Pipeline)
+- **Nginx Ingress Controller** (Traffic Management)
+
+---
+
+## 🚀 Next Steps
+- Implement **Terraform** for full **Infrastructure as Code (IaC)**.
+- Add **Monitoring & Logging** (Prometheus, Grafana).
+- Automate **Security Scanning** (Trivy, SonarQube).
+
+---
 
 
 
